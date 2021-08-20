@@ -15,30 +15,10 @@ import java.util.Properties;
 public class JDBCConnection {
     public static Logger log = LogManager.getRootLogger();
 
-    public static Connection getConnectionT1() throws SQLException {
+    public static Connection getConnection(String propertyFileURL) throws SQLException {
         Properties prop = new Properties();
 
-        try (InputStream input = new FileInputStream("src/main/resources/jdbc-t1.properties")) {
-            prop.load(input);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            log.error("File not found " + e.getMessage());
-        } catch (IOException e) {
-            e.printStackTrace();
-            log.error(e.getMessage());
-        }
-
-        return DriverManager.getConnection(
-                prop.getProperty("jdbc.url"),
-                prop.getProperty("jdbc.username"),
-                prop.getProperty("jdbc.password")
-        );
-    }
-
-    public static Connection getConnectionT3() throws SQLException {
-        Properties prop = new Properties();
-
-        try (InputStream input = new FileInputStream("src/main/resources/jdbc-t3.properties")) {
+        try (InputStream input = new FileInputStream(propertyFileURL)) {
             prop.load(input);
         } catch (FileNotFoundException e) {
             e.printStackTrace();

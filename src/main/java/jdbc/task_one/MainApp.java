@@ -5,11 +5,12 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static jdbc.JDBCConnection.getConnectionT1;
-import static jdbc.JDBCConnection.log;
+import static jdbc.JDBCConnection.*;
 
 
 public class MainApp {
+    private static final String jdbcPropertyFile = "src/main/resources/jdbc-t1.properties";
+
     public static void main(String[] args) {
 
         //insert(new Employee("Test1", new BigDecimal("30000")));
@@ -18,11 +19,13 @@ public class MainApp {
     }
 
     static List<Employee> print() {
+
+
         List<Employee> result = new ArrayList<>();
 
         String SQL_SELECT = "Select * from employees.employee";
 
-        try (Connection conn = getConnectionT1();
+        try (Connection conn = getConnection(jdbcPropertyFile);
              PreparedStatement preparedStatement = conn.prepareStatement(SQL_SELECT)) {
 
             ResultSet resultSet = preparedStatement.executeQuery();
@@ -54,7 +57,7 @@ public class MainApp {
 
     static int insert(Employee employee) {
         int result = 0;
-        try (Connection conn = getConnectionT1();
+        try (Connection conn = getConnection(jdbcPropertyFile);
              PreparedStatement insert = conn.prepareStatement("INSERT INTO employees.employee (NAME, SALARY) VALUES (?, ?)")) {
 
             insert.setString(1, employee.getName());
@@ -69,7 +72,7 @@ public class MainApp {
     }
 
     static void update(int id, Employee employee) {
-        try (Connection conn = getConnectionT1();
+        try (Connection conn = getConnection(jdbcPropertyFile);
              PreparedStatement update = conn.prepareStatement("UPDATE employees.employee SET NAME=?, SALARY=? WHERE ID=?")) {
 
             update.setString(1, employee.getName());
@@ -84,7 +87,7 @@ public class MainApp {
     }
 
     static void delete(int id) {
-        try (Connection conn = getConnectionT1();
+        try (Connection conn = getConnection(jdbcPropertyFile);
              PreparedStatement delete = conn.prepareStatement("DELETE FROM employees.employee WHERE ID=?")) {
 
             delete.setInt(1, id);
