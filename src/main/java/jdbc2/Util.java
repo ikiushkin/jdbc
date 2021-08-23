@@ -9,37 +9,8 @@ import static jdbc.JDBCConnection.getConnection;
 import static jdbc.JDBCConnection.log;
 
 public class Util {
-
-    static void copyDatabase(String jdbcPropertyFile, String DBName) {
-        try(Connection connection = getConnection(jdbcPropertyFile)) {
-            // Копируем структуру исходной БД в новую и получаем название копии
-            String to = copyDatabaseStructure(jdbcPropertyFile, DBName);
-
-            // Получаем список таблиц исходной БД
-            PreparedStatement ps = connection.prepareStatement("SHOW TABLES;");
-            List<String> tables = new ArrayList<>();
-            ResultSet resultSet = ps.executeQuery();
-
-            while (resultSet.next()) {
-                tables.add(resultSet.getString(1));
-            }
-
-            // Копируем содержимое таблиц в новую БД
-            for (String table : tables) {
-                String SQL = String.format("INSERT INTO %s.%s SELECT * FROM %s.%s;", to, table, DBName, table);
-                ps = connection.prepareStatement(SQL);
-                ps.executeUpdate();
-                log.info(SQL);
-            }
-
-            log.info(String.format("The database: %s has been copied. Name of the copy: %s", DBName, to));
-        } catch (SQLException e) {
-            log.error(e);
-        }
-    }
-
     static String copyDatabaseStructure(String jdbcPropertyFile, String DBName) {
-        String newBDName = DBName + "_copy";
+        String newDBName = DBName + "_copy";
 
         try(Connection connection = getConnection(jdbcPropertyFile)) {
             PreparedStatement ps = connection.prepareStatement("SHOW TABLES;");
@@ -52,12 +23,12 @@ public class Util {
                 tables.add(resultSet.getString(1));
             }
             // Создаем копию БД
-            ps = connection.prepareStatement("DROP DATABASE IF EXISTS " + newBDName);
+            ps = connection.prepareStatement("DROP DATABASE IF EXISTS " + newDBName);
             ps.executeUpdate();
-            ps = connection.prepareStatement("CREATE DATABASE " + newBDName);
+            ps = connection.prepareStatement("CREATE DATABASE " + newDBName);
             ps.executeUpdate();
 
-            ps = connection.prepareStatement("USE " + newBDName);
+            ps = connection.prepareStatement("USE " + newDBName);
             ps.executeUpdate();
 
             // Формируем select для создания поочередно каждой таблицы
@@ -69,12 +40,12 @@ public class Util {
                 ResultSetMetaData rsmd = rs.getMetaData();
 
                 StringBuilder sbSQL = new StringBuilder("CREATE TABLE IF NOT EXISTS ")
-                        .append(newBDName)
+                        .append(newDBName)
                         .append(".")
                         .append(tablesName)
                         .append(" (\n");
 
-                // Читаем построчно каждую колонку исходной таблицы и формируем из неё новый запрос для добавления
+                // Читаем поочередно тмп каждой колонки исходной таблицы и формируем из неё новый запрос для добавления
                 while (rs.next()) {
                     StringBuilder sb = new StringBuilder();
                     for (int j = 1; j < rsmd.getColumnCount() + 1; j++) {
@@ -125,6 +96,76 @@ public class Util {
         } catch (SQLException e) {
             log.error(e);
         }
-        return newBDName;
+        return newDBName;
+    }
+
+    static void copyDatabaseReverse(String jdbcPropertyFile, String DBName, boolean reverse) {
+        try(Connection connection = getConnection(jdbcPropertyFile)) {
+            String to = copyDatabaseStructure(jdbcPropertyFile, DBName);
+
+            PreparedStatement ps = connection.prepareStatement("SHOW TABLES;");
+            ResultSet resultSet = ps.executeQuery();
+            List<String> tables = new ArrayList<>();
+
+            while (resultSet.next()) {
+                tables.add(resultSet.getString(1));
+            }
+
+            for (String table : tables) {
+                boolean isStringPresent = false;
+
+                ps = connection.prepareStatement(String.format("SELECT * FROM %s.%s;", DBName, table));
+                ResultSet rs = ps.executeQuery();
+                ResultSetMetaData rsmd = rs.getMetaData();
+                // Ищем что реверсировать
+                for (int i = 1; i < rsmd.getColumnCount()+1; i++) {
+                    String columnType = rsmd.getColumnTypeName(i);
+                    if (columnType.matches("VARCHAR*")) {
+                        isStringPresent = true;
+                    }
+                }
+                // Если нашли построчно добавляем в новую базу
+                if (isStringPresent && reverse) {
+                    try {
+                        while (rs.next()) {
+                            StringBuilder sbSQL = new StringBuilder("INSERT INTO ")
+                                    .append(to).append(".").append(table).append(" ")
+                                    .append("VALUES (");
+
+                            for (int j = 1; j < rsmd.getColumnCount()+1; j++) {
+                                String type = rsmd.getColumnTypeName(j);
+                                if (type.matches("VARCHAR*")) {
+                                    sbSQL.append("'")
+                                            .append(new StringBuilder(rs.getString(j).replaceAll("['\"]", "")).reverse())
+                                            .append("'").append(", ");
+                                } else if (type.matches("DATETIME")) {
+                                    sbSQL.append("'")
+                                            .append(rs.getString(j))
+                                            .append("'").append(", ");
+                                } else {
+                                    sbSQL.append(rs.getString(j))
+                                            .append(", ");
+                                }
+                            }
+                            String SQL = sbSQL.substring(0, sbSQL.lastIndexOf(",")) + ");";
+                            System.out.println(SQL);
+                            ps = connection.prepareStatement(SQL);
+                            ps.executeUpdate();
+                        }
+                    } catch (SQLException e) {
+                        log.error(e);
+                    }
+                // Если нет, просто копируем всю сразу
+                } else {
+                    String SQL = String.format("INSERT INTO %s.%s SELECT * FROM %s.%s;", to, table, DBName, table);
+                    ps = connection.prepareStatement(SQL);
+                    ps.executeUpdate();
+                }
+
+                log.info(String.format("The database: %s.%s has been copied. Name of the copy: %s.%s", DBName, table, to, table));
+            }
+        } catch (SQLException e) {
+            log.error(e);
+        }
     }
 }
